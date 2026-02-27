@@ -46,6 +46,11 @@ interface FlightGroup {
   tiers: AwardFlight[];
 }
 
+interface DateSection {
+  date: string;
+  groups: FlightGroup[];
+}
+
 const IATA_INPUT_CLASS =
   "bg-bg-input border border-border rounded-lg px-3 py-2 text-sm text-text-primary uppercase tracking-wider transition-colors duration-200 focus:border-gold-dim focus:outline-none focus:ring-2 focus:ring-gold/30";
 const DATE_INPUT_CLASS =
@@ -118,6 +123,20 @@ function groupFlights(flights: AwardFlight[]): FlightGroup[] {
   });
 }
 
+function groupByDate(groups: FlightGroup[]): DateSection[] {
+  const dateMap = new Map<string, FlightGroup[]>();
+  for (const group of groups) {
+    const date = group.flight.departure_date;
+    const existing = dateMap.get(date);
+    if (existing) existing.push(group);
+    else dateMap.set(date, [group]);
+  }
+  return Array.from(dateMap.entries()).map(([date, groups]) => ({
+    date,
+    groups,
+  }));
+}
+
 export function FlightSearch() {
   const [form, setForm] = useState<SearchFormState>({
     origin: "KUL",
@@ -151,6 +170,7 @@ export function FlightSearch() {
   const flights = data?.data ?? [];
   const total = data?.meta.total ?? 0;
   const flightGroups = groupFlights(flights);
+  const dateSections = groupByDate(flightGroups);
   const hasSearched = !!activeFilters?.destination;
   const routeOrigin = activeFilters?.origin || "KUL";
   const routeDestination = activeFilters?.destination || "";
@@ -404,107 +424,123 @@ export function FlightSearch() {
         )}
 
       {hasSearched && !isError && flights.length > 0 && (
-        <div className="space-y-3">
-          {flightGroups.map((group, index) => {
-            const flight = group.flight;
-            const hasSharedTaxes = group.tiers.every(
-              (tier) => tier.taxes_myr === flight.taxes_myr
-            );
+        <div className="space-y-8">
+          {dateSections.map((section) => (
+            <section key={section.date}>
+              <div className="mb-3 flex items-center gap-3">
+                <Calendar className="size-4 text-gold" />
+                <h3 className="font-display text-lg text-text-primary tracking-wide">
+                  {fmtDate(section.date)}
+                </h3>
+                <span className="h-px flex-1 bg-border" />
+                <span className="font-mono text-[11px] text-text-tertiary uppercase tracking-wider">
+                  {section.groups.length}{" "}
+                  {section.groups.length === 1 ? "flight" : "flights"}
+                </span>
+              </div>
 
-            return (
-              <article
-                className={cn(
-                  "rounded-xl border border-border bg-bg-surface p-5 transition-all duration-300 hover:border-border-bright hover:shadow-card-hover",
-                  "animate-slide-up",
-                  STAGGER_CLASSES[Math.min(index, STAGGER_CLASSES.length - 1)]
-                )}
-                key={group.key}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <p className="font-medium font-mono text-text-primary">
-                    {flight.flight_number}
-                  </p>
-                  <p className="text-sm text-text-secondary">
-                    {fmtDate(flight.departure_date)}
-                  </p>
-                  <p className="text-text-tertiary text-xs uppercase">
-                    {flight.route_type}
-                  </p>
-                </div>
+              <div className="space-y-3">
+                {section.groups.map((group, index) => {
+                  const flight = group.flight;
+                  const hasSharedTaxes = group.tiers.every(
+                    (tier) => tier.taxes_myr === flight.taxes_myr
+                  );
 
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                  <p className="font-mono text-lg text-text-primary">
-                    {flight.departure_time}
-                    <ArrowRight className="mx-2 inline size-4 text-gold" />
-                    {flight.arrival_time}
-                    {flight.arrival_day_offset > 0 && (
-                      <sup className="ml-1 align-super text-text-tertiary text-xs">
-                        +{flight.arrival_day_offset}
-                      </sup>
-                    )}
-                  </p>
-                  <p className="font-mono text-sm text-text-secondary">
-                    <Clock className="mr-1.5 inline size-3.5 align-[-2px]" />
-                    {fmtDuration(flight.duration_minutes)}
-                  </p>
-                </div>
+                  return (
+                    <article
+                      className={cn(
+                        "rounded-xl border border-border bg-bg-surface p-5 transition-all duration-300 hover:border-border-bright hover:shadow-card-hover",
+                        "animate-slide-up",
+                        STAGGER_CLASSES[
+                          Math.min(index, STAGGER_CLASSES.length - 1)
+                        ]
+                      )}
+                      key={group.key}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <p className="font-medium font-mono text-text-primary">
+                          {flight.flight_number}
+                        </p>
+                        <p className="text-text-tertiary text-xs uppercase">
+                          {flight.route_type}
+                        </p>
+                      </div>
 
-                <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={flight.cabin}>{flight.cabin}</Badge>
-                    {hasSharedTaxes && (
-                      <span className="font-mono text-xs text-text-secondary">
-                        RM {fmt(flight.taxes_myr, 2)} taxes
-                      </span>
-                    )}
-                  </div>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                        <p className="font-mono text-lg text-text-primary">
+                          {flight.departure_time}
+                          <ArrowRight className="mx-2 inline size-4 text-gold" />
+                          {flight.arrival_time}
+                          {flight.arrival_day_offset > 0 && (
+                            <sup className="ml-1 align-super text-text-tertiary text-xs">
+                              +{flight.arrival_day_offset}
+                            </sup>
+                          )}
+                        </p>
+                        <p className="font-mono text-sm text-text-secondary">
+                          <Clock className="mr-1.5 inline size-3.5 align-[-2px]" />
+                          {fmtDuration(flight.duration_minutes)}
+                        </p>
+                      </div>
 
-                  <div className="flex min-w-64 flex-1 flex-wrap gap-2">
-                    {group.tiers.map((tier) => {
-                      const availability = seatAvailability(tier);
-
-                      return (
-                        <div
-                          className="min-w-32 flex-1 rounded-lg border border-border/80 bg-bg-elevated/70 px-3 py-2"
-                          key={tier.id}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-mono text-[11px] text-text-secondary uppercase tracking-wider">
-                              {tier.tier}
-                            </p>
-                            <span
-                              className={cn(
-                                "inline-block size-2 rounded-full",
-                                availability.dot
-                              )}
-                              title={availability.label}
-                            />
-                          </div>
-                          <p
-                            className={cn(
-                              "mt-1 font-mono text-sm",
-                              cabinColor(flight.cabin)
-                            )}
-                          >
-                            {fmt(tier.points)} pts
-                          </p>
-                          {!hasSharedTaxes && (
-                            <p className="mt-0.5 font-mono text-[11px] text-text-secondary">
-                              RM {fmt(tier.taxes_myr, 2)} taxes
-                            </p>
+                      <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={flight.cabin}>{flight.cabin}</Badge>
+                          {hasSharedTaxes && (
+                            <span className="font-mono text-xs text-text-secondary">
+                              RM {fmt(flight.taxes_myr, 2)} taxes
+                            </span>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+
+                        <div className="flex min-w-64 flex-1 flex-wrap gap-2">
+                          {group.tiers.map((tier) => {
+                            const availability = seatAvailability(tier);
+
+                            return (
+                              <div
+                                className="min-w-32 flex-1 rounded-lg border border-border/80 bg-bg-elevated/70 px-3 py-2"
+                                key={tier.id}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="font-mono text-[11px] text-text-secondary uppercase tracking-wider">
+                                    {tier.tier}
+                                  </p>
+                                  <span
+                                    className={cn(
+                                      "inline-block size-2 rounded-full",
+                                      availability.dot
+                                    )}
+                                    title={availability.label}
+                                  />
+                                </div>
+                                <p
+                                  className={cn(
+                                    "mt-1 font-mono text-sm",
+                                    cabinColor(flight.cabin)
+                                  )}
+                                >
+                                  {fmt(tier.points)} pts
+                                </p>
+                                {!hasSharedTaxes && (
+                                  <p className="mt-0.5 font-mono text-[11px] text-text-secondary">
+                                    RM {fmt(tier.taxes_myr, 2)} taxes
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <p className="font-mono text-text-tertiary text-xs uppercase tracking-wider">
-              <Calendar className="mr-1.5 inline size-3.5 align-[-2px]" />
               Page {fmt(Math.floor(offset / PAGE_SIZE) + 1)} of{" "}
               {fmt(Math.ceil(total / PAGE_SIZE))}
             </p>
