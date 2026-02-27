@@ -1,0 +1,203 @@
+@import "tailwindcss";
+
+/* --- DEPARTURE: Aviation Noir Editorial --- */
+
+@theme {
+  /* Backgrounds: warm-tinted dark */
+  --color-bg-deep: #0f0d12;
+  --color-bg-surface: #1a171f;
+  --color-bg-elevated: #252230;
+  --color-bg-input: #1e1b25;
+
+  /* Borders */
+  --color-border: #2e2a38;
+  --color-border-bright: #3d3748;
+
+  /* Text */
+  --color-text-primary: #eee8df;
+  --color-text-secondary: #918799;
+  --color-text-tertiary: #5e566a;
+
+  /* Accent: Burnished gold */
+  --color-gold: #c8a455;
+  --color-gold-dim: #8a7535;
+  --color-gold-bright: #e4c36a;
+
+  /* Accent: Rose copper */
+  --color-copper: #c87a5a;
+  --color-copper-dim: #8a5540;
+
+  /* Status */
+  --color-available: #7a9b6d;
+  --color-unavailable: #8b5c5c;
+
+  /* Cabin hierarchy */
+  --color-cabin-economy: #7885a0;
+  --color-cabin-business: #c8a455;
+  --color-cabin-first: #c87a5a;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover:
+    0 2px 8px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.3);
+  --shadow-elevated:
+    0 4px 20px rgba(0, 0, 0, 0.5), 0 16px 48px rgba(0, 0, 0, 0.3);
+  --shadow-glow-gold:
+    0 0 20px rgba(200, 164, 85, 0.15), 0 0 40px rgba(200, 164, 85, 0.05);
+
+  /* Typography */
+  --font-display: "Bodoni Moda", "Didot", "Georgia", serif;
+  --font-sans: "Hanken Grotesk", "Helvetica Neue", sans-serif;
+  --font-mono: "Azeret Mono", "Menlo", monospace;
+
+  /* Animation */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-fade-in: fade-in 0.5s var(--ease-out-expo) both;
+  --animate-slide-up: slide-up 0.6s var(--ease-out-expo) both;
+  --animate-slide-in-right: slide-in-right 0.5s var(--ease-out-expo) both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes scan-line {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* --- Base --- */
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--color-text-primary);
+  color-scheme: dark;
+  background-color: var(--color-bg-deep);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+}
+
+/* Subtle noise texture overlay for depth */
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  content: "";
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+}
+
+/* --- Scrollbar (dark themed) --- */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-bright);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
+
+/* --- Selection --- */
+
+::selection {
+  color: var(--color-text-primary);
+  background: rgba(200, 164, 85, 0.3);
+}
+
+/* --- Reduced motion --- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* --- Stagger utilities --- */
+
+@utility stagger-1 {
+  animation-delay: 0.05s;
+}
+@utility stagger-2 {
+  animation-delay: 0.1s;
+}
+@utility stagger-3 {
+  animation-delay: 0.15s;
+}
+@utility stagger-4 {
+  animation-delay: 0.2s;
+}
+@utility stagger-5 {
+  animation-delay: 0.25s;
+}
+@utility stagger-6 {
+  animation-delay: 0.3s;
+}
+@utility stagger-7 {
+  animation-delay: 0.35s;
+}
+@utility stagger-8 {
+  animation-delay: 0.4s;
+}
+@utility stagger-9 {
+  animation-delay: 0.45s;
+}
+@utility stagger-10 {
+  animation-delay: 0.5s;
+}
