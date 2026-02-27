@@ -1,0 +1,13 @@
+{
+  "name": "miles-tracker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "miles-tracker",
+      "database_id": "76e80fae-4ddf-48ed-9bc3-ddaf7d44d375",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}
