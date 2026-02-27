@@ -9,11 +9,13 @@
     "typecheck": "tsgo --noEmit",
     "check": "ultracite check",
     "fix": "ultracite fix",
+    "cli:log-akl": "node ./scripts/log-akl-redemption.mjs",
     "prepare": "lefthook install"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.13",
     "@cloudflare/workers-types": "^4.0.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260227.1",
     "drizzle-kit": "^0.31.9",
     "lefthook": "^2.1.0",
     "typescript": "^5.0.0",
