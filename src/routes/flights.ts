@@ -26,11 +26,12 @@ const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 const INTEGER_QUERY_RE = /^-?\d+$/;
 
 app.get("/flights", async (c) => {
-  const program = searchFlights(parseSearchQuery(c)).pipe(
-    Effect.provideService(Database, c.env.DB)
-  );
-
   try {
+    const searchQuery = parseSearchQuery(c);
+    const program = searchFlights(searchQuery).pipe(
+      Effect.provideService(Database, c.env.DB)
+    );
+
     const result = await Effect.runPromise(program);
     return c.json({ ok: true, data: result.data, meta: result.meta });
   } catch (err) {
@@ -63,11 +64,12 @@ app.post("/flights", async (c) => {
 });
 
 app.delete("/flights", async (c) => {
-  const program = deleteFlights(parseDeleteQuery(c)).pipe(
-    Effect.provideService(Database, c.env.DB)
-  );
-
   try {
+    const deleteQuery = parseDeleteQuery(c);
+    const program = deleteFlights(deleteQuery).pipe(
+      Effect.provideService(Database, c.env.DB)
+    );
+
     const result = await Effect.runPromise(program);
     return c.json({ ok: true, data: result });
   } catch (err) {
@@ -76,11 +78,12 @@ app.delete("/flights", async (c) => {
 });
 
 app.get("/flights/stats", async (c) => {
-  const program = getFlightStats(parseSearchQuery(c)).pipe(
-    Effect.provideService(Database, c.env.DB)
-  );
-
   try {
+    const searchQuery = parseSearchQuery(c);
+    const program = getFlightStats(searchQuery).pipe(
+      Effect.provideService(Database, c.env.DB)
+    );
+
     const result = await Effect.runPromise(program);
     return c.json({ ok: true, data: result });
   } catch (err) {
