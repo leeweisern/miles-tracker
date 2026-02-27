@@ -39,34 +39,34 @@ export function BarChartCard({
     <ResponsiveContainer height={height} width="100%">
       <RechartsBar barCategoryGap="20%" data={data}>
         <CartesianGrid
-          stroke="#2e2a38"
+          stroke="#e5e3df"
           strokeDasharray="3 3"
           vertical={false}
         />
         <XAxis
           axisLine={false}
           dataKey={xKey}
-          tick={{ fontSize: 11, fill: "#918799", fontFamily: "Azeret Mono" }}
+          tick={{ fontSize: 11, fill: "#6b7280", fontFamily: "Azeret Mono" }}
           tickFormatter={formatX}
           tickLine={false}
         />
         <YAxis
           axisLine={false}
-          tick={{ fontSize: 11, fill: "#918799", fontFamily: "Azeret Mono" }}
+          tick={{ fontSize: 11, fill: "#6b7280", fontFamily: "Azeret Mono" }}
           tickLine={false}
           width={50}
         />
         <Tooltip
           contentStyle={{
-            background: "#252230",
-            border: "1px solid #3d3748",
+            background: "#ffffff",
+            border: "1px solid #e5e3df",
             borderRadius: 8,
             fontFamily: "Azeret Mono",
             fontSize: 12,
-            color: "#eee8df",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            color: "#1a1a1a",
+            boxShadow: "0 8px 20px rgba(0, 0, 0, 0.08)",
           }}
-          cursor={{ fill: "rgba(200,164,85,0.06)" }}
+          cursor={{ fill: "rgba(200,164,85,0.08)" }}
           formatter={(value: number | string) => [
             formatTooltip
               ? formatTooltip(Number(value))

@@ -40,6 +40,12 @@ interface SearchFormState {
   sort: NonNullable<SearchFilters["sort"]>;
 }
 
+interface FlightGroup {
+  key: string;
+  flight: AwardFlight;
+  tiers: AwardFlight[];
+}
+
 const IATA_INPUT_CLASS =
   "bg-bg-input border border-border rounded-lg px-3 py-2 text-sm text-text-primary uppercase tracking-wider transition-colors duration-200 focus:border-gold-dim focus:outline-none focus:ring-2 focus:ring-gold/30";
 const DATE_INPUT_CLASS =
@@ -86,6 +92,32 @@ function seatAvailability(flight: AwardFlight) {
   };
 }
 
+function groupFlights(flights: AwardFlight[]): FlightGroup[] {
+  const groups = new Map<string, AwardFlight[]>();
+
+  for (const flight of flights) {
+    const key = `${flight.flight_number}|${flight.departure_date}|${flight.departure_time}|${flight.cabin}`;
+    const group = groups.get(key);
+
+    if (group) {
+      group.push(flight);
+      continue;
+    }
+
+    groups.set(key, [flight]);
+  }
+
+  return Array.from(groups.entries()).map(([key, tiers]) => {
+    const representativeFlight = tiers[0];
+    const sortedTiers = [...tiers].sort((a, b) => a.points - b.points);
+    return {
+      key,
+      flight: representativeFlight,
+      tiers: sortedTiers,
+    };
+  });
+}
+
 export function FlightSearch() {
   const [form, setForm] = useState<SearchFormState>({
     origin: "KUL",
@@ -118,6 +150,7 @@ export function FlightSearch() {
 
   const flights = data?.data ?? [];
   const total = data?.meta.total ?? 0;
+  const flightGroups = groupFlights(flights);
   const hasSearched = !!activeFilters?.destination;
   const routeOrigin = activeFilters?.origin || "KUL";
   const routeDestination = activeFilters?.destination || "";
@@ -305,7 +338,7 @@ export function FlightSearch() {
           </Select>
 
           <button
-            className="inline-flex items-center gap-2 rounded-lg bg-gold px-6 py-2 font-semibold text-bg-deep transition-colors hover:bg-gold-bright"
+            className="inline-flex items-center gap-2 rounded-lg bg-gold px-6 py-2 font-semibold text-white transition-colors hover:bg-gold-bright"
             type="submit"
           >
             <Search className="size-4" />
@@ -318,7 +351,7 @@ export function FlightSearch() {
         <div className="stagger-2 flex animate-fade-in items-center justify-between">
           <p className="font-mono text-text-tertiary text-xs uppercase tracking-wider">
             <Filter className="mr-1.5 inline size-3.5 align-[-2px]" />
-            <span className="text-gold">{fmt(total)}</span> flights found
+            <span className="text-gold">{fmt(flightGroups.length)}</span> flights found
           </p>
           {isFetching && (
             <span className="font-mono text-[10px] text-text-secondary uppercase tracking-wider">
@@ -372,8 +405,12 @@ export function FlightSearch() {
 
       {hasSearched && !isError && flights.length > 0 && (
         <div className="space-y-3">
-          {flights.map((flight, index) => {
-            const availability = seatAvailability(flight);
+          {flightGroups.map((group, index) => {
+            const flight = group.flight;
+            const hasSharedTaxes = group.tiers.every(
+              (tier) => tier.taxes_myr === flight.taxes_myr
+            );
+
             return (
               <article
                 className={cn(
@@ -381,7 +418,7 @@ export function FlightSearch() {
                   "animate-slide-up",
                   STAGGER_CLASSES[Math.min(index, STAGGER_CLASSES.length - 1)]
                 )}
-                key={flight.id}
+                key={group.key}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <p className="font-medium font-mono text-text-primary">
@@ -412,39 +449,54 @@ export function FlightSearch() {
                   </p>
                 </div>
 
-                <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
-                  <div className="flex items-center gap-2">
+                <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={flight.cabin}>{flight.cabin}</Badge>
-                    <span className="text-sm text-text-secondary capitalize">
-                      {flight.tier}
-                    </span>
+                    {hasSharedTaxes && (
+                      <span className="font-mono text-xs text-text-secondary">
+                        RM {fmt(flight.taxes_myr, 2)} taxes
+                      </span>
+                    )}
                   </div>
 
-                  <div className="text-right">
-                    <p
-                      className={cn(
-                        "font-mono text-xl",
-                        cabinColor(flight.cabin)
-                      )}
-                    >
-                      {fmt(flight.points)} pts
-                    </p>
-                    <p className="font-mono text-sm text-text-secondary">
-                      RM {fmt(flight.taxes_myr, 2)}
-                    </p>
-                  </div>
+                  <div className="flex min-w-64 flex-1 flex-wrap gap-2">
+                    {group.tiers.map((tier) => {
+                      const availability = seatAvailability(tier);
 
-                  <p className="flex items-center font-mono text-sm">
-                    <span
-                      className={cn(
-                        "mr-1 inline-block size-2 rounded-full",
-                        availability.dot
-                      )}
-                    />
-                    <span className={cn("text-sm", availability.textClass)}>
-                      {availability.label}
-                    </span>
-                  </p>
+                      return (
+                        <div
+                          className="min-w-32 flex-1 rounded-lg border border-border/80 bg-bg-elevated/70 px-3 py-2"
+                          key={tier.id}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-mono text-[11px] text-text-secondary uppercase tracking-wider">
+                              {tier.tier}
+                            </p>
+                            <span
+                              className={cn(
+                                "inline-block size-2 rounded-full",
+                                availability.dot
+                              )}
+                              title={availability.label}
+                            />
+                          </div>
+                          <p
+                            className={cn(
+                              "mt-1 font-mono text-sm",
+                              cabinColor(flight.cabin)
+                            )}
+                          >
+                            {fmt(tier.points)} pts
+                          </p>
+                          {!hasSharedTaxes && (
+                            <p className="mt-0.5 font-mono text-[11px] text-text-secondary">
+                              RM {fmt(tier.taxes_myr, 2)} taxes
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </article>
             );
@@ -453,7 +505,8 @@ export function FlightSearch() {
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <p className="font-mono text-text-tertiary text-xs uppercase tracking-wider">
               <Calendar className="mr-1.5 inline size-3.5 align-[-2px]" />
-              Showing {fmt(pageStart)}-{fmt(pageEnd)} of {fmt(total)}
+              Page {fmt(Math.floor(offset / PAGE_SIZE) + 1)} of{" "}
+              {fmt(Math.ceil(total / PAGE_SIZE))}
             </p>
             <div className="flex items-center gap-2">
               <button

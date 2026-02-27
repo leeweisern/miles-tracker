@@ -314,7 +314,7 @@ export function RouteAnalytics() {
             <div className="flex items-end lg:col-span-1">
               <button
                 className={cn(
-                  "w-full rounded-lg bg-gold px-4 py-2.5 font-semibold text-bg-deep text-sm transition-all duration-200",
+                  "w-full rounded-lg bg-gold px-4 py-2.5 font-semibold text-sm text-white transition-all duration-200",
                   "hover:bg-gold-bright focus:outline-none focus:ring-2 focus:ring-gold/40",
                   "disabled:cursor-not-allowed disabled:opacity-55"
                 )}
