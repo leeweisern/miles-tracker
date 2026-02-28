@@ -1,5 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Calendar, Plane, TrendingUp } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  Plane,
+  TrendingUp,
+} from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { BarChartCard } from "@/components/charts/bar-chart";
 import { Badge } from "@/components/ui/badge";
@@ -138,6 +146,18 @@ function cabinPoints(row: DatePricing, cabin: Exclude<DateSortKey, "date">) {
   return row[cabin]?.min_points ?? null;
 }
 
+function SortIndicator({
+  column,
+  activeColumn,
+  ascending,
+}: { column: DateSortKey; activeColumn: DateSortKey; ascending: boolean }) {
+  if (column !== activeColumn) {
+    return null;
+  }
+  const Icon = ascending ? ChevronUp : ChevronDown;
+  return <Icon className="ml-1 inline size-3" />;
+}
+
 export function RouteAnalytics() {
   const [form, setForm] = useState<RouteFormState>({
     origin: "KUL",
@@ -148,6 +168,7 @@ export function RouteAnalytics() {
   });
   const [activeFilters, setActiveFilters] = useState<StatsFilters | null>(null);
   const [dateSortKey, setDateSortKey] = useState<DateSortKey>("date");
+  const [dateSortAsc, setDateSortAsc] = useState(true);
 
   const hasSearched = activeFilters !== null;
   const isAnywhereMode = !!activeFilters && !activeFilters.destination;
@@ -221,9 +242,12 @@ export function RouteAnalytics() {
 
   const sortedDates = useMemo(() => {
     const sorted = [...datePricing];
+    const dir = dateSortAsc ? 1 : -1;
+
     if (dateSortKey === "date") {
-      sorted.sort((left, right) =>
-        left.departure_date.localeCompare(right.departure_date)
+      sorted.sort(
+        (left, right) =>
+          dir * left.departure_date.localeCompare(right.departure_date)
       );
       return sorted;
     }
@@ -241,13 +265,13 @@ export function RouteAnalytics() {
         return -1;
       }
       if (leftPoints !== rightPoints) {
-        return leftPoints - rightPoints;
+        return dir * (leftPoints - rightPoints);
       }
       return left.departure_date.localeCompare(right.departure_date);
     });
 
     return sorted;
-  }, [datePricing, dateSortKey]);
+  }, [datePricing, dateSortKey, dateSortAsc]);
 
   const cabinCards =
     stats == null
@@ -287,6 +311,7 @@ export function RouteAnalytics() {
     const origin = normalizeIata(form.origin) || "KUL";
 
     setDateSortKey("date");
+    setDateSortAsc(true);
     setActiveFilters({
       destination,
       origin,
@@ -299,6 +324,15 @@ export function RouteAnalytics() {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     submitFilters(form.destination);
+  }
+
+  function toggleDateSort(key: DateSortKey) {
+    if (dateSortKey === key) {
+      setDateSortAsc((prev) => !prev);
+    } else {
+      setDateSortKey(key);
+      setDateSortAsc(true);
+    }
   }
 
   function analyzeDestination(destination: string) {
@@ -468,6 +502,25 @@ export function RouteAnalytics() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {hasSearched && isAnywhereMode && (
+        <div className="stagger-3 animate-slide-up">
+          <div className="flex items-center justify-center gap-3 md:gap-6">
+            <p className="font-display text-4xl text-text-primary leading-none md:text-5xl">
+              {activeFilters?.origin || "KUL"}
+            </p>
+            <div className="flex min-w-24 items-center gap-2 text-gold md:min-w-36 md:gap-3">
+              <span className="h-px flex-1 bg-gold/60" />
+              <Plane className="size-4 md:size-5" strokeWidth={1.6} />
+              <span className="h-px flex-1 bg-gold/60" />
+              <ArrowRight className="size-4 md:size-5" />
+            </div>
+            <p className="font-display text-4xl text-gold leading-none md:text-5xl">
+              Anywhere
+            </p>
+          </div>
+        </div>
       )}
 
       {hasSearched && isAnywhereMode && destinationsListQuery.isPending && (
@@ -759,36 +812,40 @@ export function RouteAnalytics() {
                         <thead>
                           <tr className="border-b border-border text-left">
                             <th
-                              className="cursor-pointer py-2 font-mono text-xs text-text-tertiary uppercase tracking-wider"
-                              onClick={() => {
-                                setDateSortKey("date");
-                              }}
+                              className="cursor-pointer select-none py-2 font-mono text-xs uppercase tracking-wider transition-colors hover:text-text-primary"
+                              onClick={() => toggleDateSort("date")}
                             >
-                              Date
+                              <span className={dateSortKey === "date" ? "text-gold" : "text-text-tertiary"}>
+                                Date
+                                <SortIndicator column="date" activeColumn={dateSortKey} ascending={dateSortAsc} />
+                              </span>
                             </th>
                             <th
-                              className="cursor-pointer py-2 text-right font-mono text-xs text-text-tertiary uppercase tracking-wider"
-                              onClick={() => {
-                                setDateSortKey("economy");
-                              }}
+                              className="cursor-pointer select-none py-2 text-right font-mono text-xs uppercase tracking-wider transition-colors hover:text-text-primary"
+                              onClick={() => toggleDateSort("economy")}
                             >
-                              Economy
+                              <span className={dateSortKey === "economy" ? "text-gold" : "text-text-tertiary"}>
+                                Economy
+                                <SortIndicator column="economy" activeColumn={dateSortKey} ascending={dateSortAsc} />
+                              </span>
                             </th>
                             <th
-                              className="cursor-pointer py-2 text-right font-mono text-xs text-text-tertiary uppercase tracking-wider"
-                              onClick={() => {
-                                setDateSortKey("business");
-                              }}
+                              className="cursor-pointer select-none py-2 text-right font-mono text-xs uppercase tracking-wider transition-colors hover:text-text-primary"
+                              onClick={() => toggleDateSort("business")}
                             >
-                              Business
+                              <span className={dateSortKey === "business" ? "text-gold" : "text-text-tertiary"}>
+                                Business
+                                <SortIndicator column="business" activeColumn={dateSortKey} ascending={dateSortAsc} />
+                              </span>
                             </th>
                             <th
-                              className="cursor-pointer py-2 text-right font-mono text-xs text-text-tertiary uppercase tracking-wider"
-                              onClick={() => {
-                                setDateSortKey("first");
-                              }}
+                              className="cursor-pointer select-none py-2 text-right font-mono text-xs uppercase tracking-wider transition-colors hover:text-text-primary"
+                              onClick={() => toggleDateSort("first")}
                             >
-                              First
+                              <span className={dateSortKey === "first" ? "text-gold" : "text-text-tertiary"}>
+                                First
+                                <SortIndicator column="first" activeColumn={dateSortKey} ascending={dateSortAsc} />
+                              </span>
                             </th>
                             {hasAnyLastUpdated && (
                               <th className="py-2 text-right font-mono text-xs text-text-tertiary uppercase tracking-wider">
