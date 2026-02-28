@@ -158,18 +158,19 @@ function getLatestScrapedAt(flights: AwardFlight[]): string | null {
   let latestIso: string | null = null;
 
   for (const flight of flights) {
-    if (!flight.scraped_at) {
+    const iso = flight.scraped_at ?? flight.updated_at;
+    if (!iso) {
       continue;
     }
 
-    const timestamp = Date.parse(flight.scraped_at);
+    const timestamp = Date.parse(iso);
     if (Number.isNaN(timestamp)) {
       continue;
     }
 
     if (timestamp > latestTimestamp) {
       latestTimestamp = timestamp;
-      latestIso = flight.scraped_at;
+      latestIso = iso;
     }
   }
 
