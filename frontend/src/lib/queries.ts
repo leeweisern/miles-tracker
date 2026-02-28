@@ -1,6 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
 import { milesApi } from "./api";
-import type { SearchFilters } from "./types";
+import type {
+  CheapestByDateFilters,
+  DestinationsFilters,
+  SearchFilters,
+} from "./types";
 
 export const programsQuery = () =>
   queryOptions({
@@ -21,5 +25,18 @@ export const flightStatsQuery = (
   queryOptions({
     queryKey: ["miles", "flights", "stats", filters],
     queryFn: () => milesApi.stats(filters),
+    enabled: !!filters.destination,
+  });
+
+export const destinationsQuery = (filters: DestinationsFilters) =>
+  queryOptions({
+    queryKey: ["miles", "destinations", filters],
+    queryFn: () => milesApi.destinations(filters),
+  });
+
+export const cheapestByDateQuery = (filters: CheapestByDateFilters) =>
+  queryOptions({
+    queryKey: ["miles", "flights", "cheapest-by-date", filters],
+    queryFn: () => milesApi.cheapestByDate(filters),
     enabled: !!filters.destination,
   });

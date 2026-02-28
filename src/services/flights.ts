@@ -126,6 +126,7 @@ export interface FlightStatsResult {
   business: Record<string, TierPointStats> | null;
   first: Record<string, TierPointStats> | null;
   total_flights: number;
+  last_updated: string | null;
 }
 
 interface NormalizedSearchFilters {
@@ -477,9 +478,10 @@ export function getFlightStats(
               `SELECT
                  COUNT(*) AS total_flights,
                  MIN(departure_date) AS min_date,
-                 MAX(departure_date) AS max_date
-               FROM award_flights
-               ${where.sql}`
+                 MAX(departure_date) AS max_date,
+                 MAX(COALESCE(scraped_at, updated_at)) AS last_updated
+                FROM award_flights
+                ${where.sql}`
             )
             .bind(...where.params)
             .first(),
@@ -536,7 +538,233 @@ export function getFlightStats(
       business: toNullableObject(byCabin.business),
       first: toNullableObject(byCabin.first),
       total_flights: toInt(summary.total_flights),
+      last_updated: toNullableString(summary.last_updated) ?? null,
     };
+  });
+}
+
+export interface DestinationSummary {
+  destination: string;
+  flight_count: number;
+  date_range: { from: string | null; to: string | null };
+  economy_min_points: number | null;
+  business_min_points: number | null;
+  first_min_points: number | null;
+  available_count: number;
+  last_updated: string | null;
+}
+
+export interface DestinationsInput {
+  origin?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  cabin?: string;
+  availableOnly?: boolean | null;
+}
+
+export function getDestinations(
+  input: DestinationsInput
+): Effect.Effect<
+  DestinationSummary[],
+  DatabaseError | ValidationError,
+  Database
+> {
+  return Effect.gen(function* () {
+    const origin = yield* requireIataField(
+      input.origin,
+      "origin",
+      DEFAULT_ORIGIN
+    );
+    const { dateFrom, dateTo } = yield* normalizeDateFilters(
+      undefined,
+      input.dateFrom,
+      input.dateTo
+    );
+    const cabin = yield* normalizeCabinField(input.cabin);
+    const availableOnly = yield* normalizeAvailableOnly(input.availableOnly);
+
+    const where: string[] = ["origin = ?"];
+    const params: Array<string | number> = [origin];
+
+    if (dateFrom) {
+      where.push("departure_date >= ?");
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      where.push("departure_date <= ?");
+      params.push(dateTo);
+    }
+    if (cabin) {
+      where.push("cabin = ?");
+      params.push(cabin);
+    }
+    if (availableOnly) {
+      where.push("available = 1");
+    }
+
+    const sql = `
+      SELECT
+        destination,
+        COUNT(*) AS flight_count,
+        MIN(departure_date) AS min_date,
+        MAX(departure_date) AS max_date,
+        MIN(CASE WHEN cabin = 'economy' THEN points END) AS economy_min_points,
+        MIN(CASE WHEN cabin = 'business' THEN points END) AS business_min_points,
+        MIN(CASE WHEN cabin = 'first' THEN points END) AS first_min_points,
+        SUM(CASE WHEN available = 1 THEN 1 ELSE 0 END) AS available_count,
+        MAX(COALESCE(scraped_at, updated_at)) AS last_updated
+      FROM award_flights
+      WHERE ${where.join(" AND ")}
+      GROUP BY destination
+      ORDER BY destination
+    `;
+
+    const db = yield* Database;
+    const result = yield* Effect.tryPromise({
+      try: () =>
+        db
+          .prepare(sql)
+          .bind(...params)
+          .all(),
+      catch: (cause) =>
+        new DatabaseError({ message: "Failed to query destinations", cause }),
+    });
+
+    return (result.results ?? []).map((row) => {
+      const r = asRecord(row);
+      return {
+        destination: asString(r.destination),
+        flight_count: toInt(r.flight_count),
+        date_range: {
+          from: toNullableString(r.min_date) ?? null,
+          to: toNullableString(r.max_date) ?? null,
+        },
+        economy_min_points: nullableInt(r.economy_min_points),
+        business_min_points: nullableInt(r.business_min_points),
+        first_min_points: nullableInt(r.first_min_points),
+        available_count: toInt(r.available_count),
+        last_updated: toNullableString(r.last_updated) ?? null,
+      };
+    });
+  });
+}
+
+export interface DatePricing {
+  departure_date: string;
+  economy: { min_points: number; available: boolean } | null;
+  business: { min_points: number; available: boolean } | null;
+  first: { min_points: number; available: boolean } | null;
+  last_updated: string | null;
+}
+
+export interface CheapestByDateInput {
+  destination: string;
+  origin?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  cabin?: string;
+  programId?: string;
+  availableOnly?: boolean | null;
+}
+
+export function getCheapestByDate(
+  input: CheapestByDateInput
+): Effect.Effect<DatePricing[], DatabaseError | ValidationError, Database> {
+  return Effect.gen(function* () {
+    const destination = yield* requireIataField(
+      input.destination,
+      "destination"
+    );
+    const origin = yield* requireIataField(
+      input.origin,
+      "origin",
+      DEFAULT_ORIGIN
+    );
+    const { dateFrom, dateTo } = yield* normalizeDateFilters(
+      undefined,
+      input.dateFrom,
+      input.dateTo
+    );
+    const cabin = yield* normalizeCabinField(input.cabin);
+    const programId = normalizeOptionalString(input.programId);
+    const availableOnly = yield* normalizeAvailableOnly(input.availableOnly);
+
+    const where: string[] = ["origin = ?", "destination = ?"];
+    const params: Array<string | number> = [origin, destination];
+
+    if (dateFrom) {
+      where.push("departure_date >= ?");
+      params.push(dateFrom);
+    }
+    if (dateTo) {
+      where.push("departure_date <= ?");
+      params.push(dateTo);
+    }
+    if (cabin) {
+      where.push("cabin = ?");
+      params.push(cabin);
+    }
+    if (programId) {
+      where.push("program_id = ?");
+      params.push(programId);
+    }
+    if (availableOnly) {
+      where.push("available = 1");
+    }
+
+    const sql = `
+      SELECT
+        departure_date,
+        MIN(CASE WHEN cabin = 'economy' THEN points END) AS econ_min,
+        MAX(CASE WHEN cabin = 'economy' AND available = 1 THEN 1 ELSE 0 END) AS econ_avail,
+        MIN(CASE WHEN cabin = 'business' THEN points END) AS biz_min,
+        MAX(CASE WHEN cabin = 'business' AND available = 1 THEN 1 ELSE 0 END) AS biz_avail,
+        MIN(CASE WHEN cabin = 'first' THEN points END) AS first_min,
+        MAX(CASE WHEN cabin = 'first' AND available = 1 THEN 1 ELSE 0 END) AS first_avail,
+        MAX(COALESCE(scraped_at, updated_at)) AS last_updated
+      FROM award_flights
+      WHERE ${where.join(" AND ")}
+      GROUP BY departure_date
+      ORDER BY departure_date ASC
+    `;
+
+    const db = yield* Database;
+    const result = yield* Effect.tryPromise({
+      try: () =>
+        db
+          .prepare(sql)
+          .bind(...params)
+          .all(),
+      catch: (cause) =>
+        new DatabaseError({
+          message: "Failed to query cheapest by date",
+          cause,
+        }),
+    });
+
+    return (result.results ?? []).map((row) => {
+      const r = asRecord(row);
+      const econMin = nullableInt(r.econ_min);
+      const bizMin = nullableInt(r.biz_min);
+      const firstMin = nullableInt(r.first_min);
+
+      return {
+        departure_date: asString(r.departure_date),
+        economy:
+          econMin != null
+            ? { min_points: econMin, available: toInt(r.econ_avail) === 1 }
+            : null,
+        business:
+          bizMin != null
+            ? { min_points: bizMin, available: toInt(r.biz_avail) === 1 }
+            : null,
+        first:
+          firstMin != null
+            ? { min_points: firstMin, available: toInt(r.first_avail) === 1 }
+            : null,
+        last_updated: toNullableString(r.last_updated) ?? null,
+      };
+    });
   });
 }
 

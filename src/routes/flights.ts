@@ -13,8 +13,12 @@ import {
   toNullableString,
 } from "../lib/parse";
 import {
+  type CheapestByDateInput,
   type DeleteFlightsInput,
+  type DestinationsInput,
   deleteFlights,
+  getCheapestByDate,
+  getDestinations,
   getFlightStats,
   type SearchFlightsInput,
   searchFlights,
@@ -84,6 +88,46 @@ app.get("/flights/stats", async (c) => {
       Effect.provideService(Database, c.env.DB)
     );
 
+    const result = await Effect.runPromise(program);
+    return c.json({ ok: true, data: result });
+  } catch (err) {
+    return handleRouteError(c, err);
+  }
+});
+
+app.get("/destinations", async (c) => {
+  try {
+    const input: DestinationsInput = {
+      origin: c.req.query("origin") ?? "KUL",
+      dateFrom: c.req.query("date_from") ?? undefined,
+      dateTo: c.req.query("date_to") ?? undefined,
+      cabin: c.req.query("cabin") ?? undefined,
+      availableOnly: parseOptionalBooleanQuery(c.req.query("available_only")),
+    };
+    const program = getDestinations(input).pipe(
+      Effect.provideService(Database, c.env.DB)
+    );
+    const result = await Effect.runPromise(program);
+    return c.json({ ok: true, data: result });
+  } catch (err) {
+    return handleRouteError(c, err);
+  }
+});
+
+app.get("/flights/cheapest-by-date", async (c) => {
+  try {
+    const input: CheapestByDateInput = {
+      destination: c.req.query("destination") ?? "",
+      origin: c.req.query("origin") ?? "KUL",
+      dateFrom: c.req.query("date_from") ?? undefined,
+      dateTo: c.req.query("date_to") ?? undefined,
+      cabin: c.req.query("cabin") ?? undefined,
+      programId: c.req.query("program_id") ?? undefined,
+      availableOnly: parseOptionalBooleanQuery(c.req.query("available_only")),
+    };
+    const program = getCheapestByDate(input).pipe(
+      Effect.provideService(Database, c.env.DB)
+    );
     const result = await Effect.runPromise(program);
     return c.json({ ok: true, data: result });
   } catch (err) {

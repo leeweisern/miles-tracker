@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Plane, TrendingUp } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { BarChart3, Calendar, Plane, TrendingUp } from "lucide-react";
+import { type FormEvent, useMemo, useState } from "react";
 import { BarChartCard } from "@/components/charts/bar-chart";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -12,9 +12,20 @@ import {
 } from "@/components/ui/card";
 import { ErrorCard } from "@/components/ui/error-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { flightStatsQuery } from "@/lib/queries";
-import type { FlightStats, TierStats } from "@/lib/types";
-import { cn, fmt } from "@/lib/utils";
+import {
+  cheapestByDateQuery,
+  destinationsQuery,
+  flightStatsQuery,
+} from "@/lib/queries";
+import type {
+  CheapestByDateFilters,
+  DatePricing,
+  DestinationSummary,
+  DestinationsFilters,
+  FlightStats,
+  TierStats,
+} from "@/lib/types";
+import { cn, fmt, fmtDate, fmtDateShort, fmtTimeAgo } from "@/lib/utils";
 
 const CABIN_KEYS = ["economy", "business", "first"] as const;
 const STAGGER_CLASSES = [
@@ -29,6 +40,7 @@ const STAGGER_CLASSES = [
 type CabinKey = (typeof CABIN_KEYS)[number];
 type StatsFilters = Parameters<typeof flightStatsQuery>[0];
 type CabinFilter = "all" | CabinKey;
+type DateSortKey = "date" | "economy" | "business" | "first";
 
 interface RouteFormState {
   cabin: CabinFilter;
@@ -115,6 +127,17 @@ function buildChartData(stats: FlightStats) {
     }));
 }
 
+function normalizeIata(value: string): string {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "")
+    .slice(0, 3);
+}
+
+function cabinPoints(row: DatePricing, cabin: Exclude<DateSortKey, "date">) {
+  return row[cabin]?.min_points ?? null;
+}
+
 export function RouteAnalytics() {
   const [form, setForm] = useState<RouteFormState>({
     origin: "KUL",
@@ -124,12 +147,107 @@ export function RouteAnalytics() {
     cabin: "all",
   });
   const [activeFilters, setActiveFilters] = useState<StatsFilters | null>(null);
+  const [dateSortKey, setDateSortKey] = useState<DateSortKey>("date");
 
-  const statsQuery = useQuery(
-    flightStatsQuery(activeFilters ?? { destination: "" })
-  );
-  const stats = statsQuery.data;
   const hasSearched = activeFilters !== null;
+  const isAnywhereMode = !!activeFilters && !activeFilters.destination;
+  const isRouteMode = !!activeFilters?.destination;
+
+  const statsQuery = useQuery({
+    ...flightStatsQuery(activeFilters ?? { destination: "" }),
+    enabled: isRouteMode,
+  });
+  const stats = statsQuery.data;
+
+  const destinationsFilters: DestinationsFilters = {
+    origin: activeFilters?.origin,
+    date_from: activeFilters?.date_from,
+    date_to: activeFilters?.date_to,
+    cabin: activeFilters?.cabin,
+  };
+  const destinationsListQuery = useQuery({
+    ...destinationsQuery(destinationsFilters),
+    enabled: isAnywhereMode,
+  });
+  const destinations: DestinationSummary[] = destinationsListQuery.data ?? [];
+
+  const cheapestByDateFilters: CheapestByDateFilters = {
+    destination: activeFilters?.destination ?? "",
+    origin: activeFilters?.origin,
+    date_from: activeFilters?.date_from,
+    date_to: activeFilters?.date_to,
+    cabin: activeFilters?.cabin,
+  };
+  const cheapestDatesQuery = useQuery({
+    ...cheapestByDateQuery(cheapestByDateFilters),
+    enabled: isRouteMode,
+  });
+  const datePricing: DatePricing[] = cheapestDatesQuery.data ?? [];
+
+  const highlightedDateRows = useMemo(() => {
+    const highlighted = new Set<string>();
+    const cabins: Exclude<DateSortKey, "date">[] = [
+      "economy",
+      "business",
+      "first",
+    ];
+
+    for (const cabin of cabins) {
+      let minPoints: number | null = null;
+      for (const row of datePricing) {
+        const pts = cabinPoints(row, cabin);
+        if (pts != null && (minPoints == null || pts < minPoints)) {
+          minPoints = pts;
+        }
+      }
+      if (minPoints == null) {
+        continue;
+      }
+
+      for (const row of datePricing) {
+        if (cabinPoints(row, cabin) === minPoints) {
+          highlighted.add(row.departure_date);
+        }
+      }
+    }
+
+    return highlighted;
+  }, [datePricing]);
+
+  const hasAnyLastUpdated = useMemo(
+    () => datePricing.some((row) => row.last_updated != null),
+    [datePricing]
+  );
+
+  const sortedDates = useMemo(() => {
+    const sorted = [...datePricing];
+    if (dateSortKey === "date") {
+      sorted.sort((left, right) =>
+        left.departure_date.localeCompare(right.departure_date)
+      );
+      return sorted;
+    }
+
+    sorted.sort((left, right) => {
+      const leftPoints = cabinPoints(left, dateSortKey);
+      const rightPoints = cabinPoints(right, dateSortKey);
+      if (leftPoints == null && rightPoints == null) {
+        return left.departure_date.localeCompare(right.departure_date);
+      }
+      if (leftPoints == null) {
+        return 1;
+      }
+      if (rightPoints == null) {
+        return -1;
+      }
+      if (leftPoints !== rightPoints) {
+        return leftPoints - rightPoints;
+      }
+      return left.departure_date.localeCompare(right.departure_date);
+    });
+
+    return sorted;
+  }, [datePricing, dateSortKey]);
 
   const cabinCards =
     stats == null
@@ -157,22 +275,18 @@ export function RouteAnalytics() {
 
   const noData =
     hasSearched &&
+    isRouteMode &&
     !statsQuery.isPending &&
     !statsQuery.isError &&
     (stats == null || stats.total_flights === 0);
 
-  const isSubmitDisabled = form.destination.trim().length === 0;
+  const isSubmitDisabled = false;
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function submitFilters(destinationInput: string) {
+    const destination = normalizeIata(destinationInput);
+    const origin = normalizeIata(form.origin) || "KUL";
 
-    const destination = form.destination.trim().toUpperCase();
-    if (!destination) {
-      return;
-    }
-
-    const origin = form.origin.trim().toUpperCase() || "KUL";
-
+    setDateSortKey("date");
     setActiveFilters({
       destination,
       origin,
@@ -180,6 +294,16 @@ export function RouteAnalytics() {
       date_to: form.date_to || undefined,
       cabin: form.cabin === "all" ? undefined : form.cabin,
     });
+  }
+
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    submitFilters(form.destination);
+  }
+
+  function analyzeDestination(destination: string) {
+    setForm((prev) => ({ ...prev, destination }));
+    submitFilters(destination);
   }
 
   return (
@@ -217,7 +341,10 @@ export function RouteAnalytics() {
                 id="analytics-origin"
                 maxLength={3}
                 onChange={(event) =>
-                  setForm((prev) => ({ ...prev, origin: event.target.value }))
+                  setForm((prev) => ({
+                    ...prev,
+                    origin: normalizeIata(event.target.value),
+                  }))
                 }
                 placeholder="KUL"
                 value={form.origin}
@@ -238,11 +365,10 @@ export function RouteAnalytics() {
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    destination: event.target.value,
+                    destination: normalizeIata(event.target.value),
                   }))
                 }
                 placeholder="LHR"
-                required
                 value={form.destination}
               />
             </label>
@@ -318,10 +444,16 @@ export function RouteAnalytics() {
                   "hover:bg-gold-bright focus:outline-none focus:ring-2 focus:ring-gold/40",
                   "disabled:cursor-not-allowed disabled:opacity-55"
                 )}
-                disabled={isSubmitDisabled || statsQuery.isFetching}
+                disabled={
+                  isSubmitDisabled ||
+                  statsQuery.isFetching ||
+                  destinationsListQuery.isFetching
+                }
                 type="submit"
               >
-                {statsQuery.isFetching ? "Analyzing..." : "Analyze"}
+                {statsQuery.isFetching || destinationsListQuery.isFetching
+                  ? "Analyzing..."
+                  : "Analyze"}
               </button>
             </div>
           </form>
@@ -332,13 +464,104 @@ export function RouteAnalytics() {
         <Card className="stagger-3 animate-slide-up border-dashed">
           <CardContent className="flex min-h-40 items-center justify-center py-12">
             <p className="text-center font-display text-2xl text-text-secondary">
-              Select a route to analyze
+              Enter a route to analyze, or leave destination empty to explore.
             </p>
           </CardContent>
         </Card>
       )}
 
-      {hasSearched && statsQuery.isPending && (
+      {hasSearched && isAnywhereMode && destinationsListQuery.isPending && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="stagger-3 h-36 animate-slide-up" />
+          <Skeleton className="stagger-4 h-36 animate-slide-up" />
+          <Skeleton className="stagger-5 h-36 animate-slide-up" />
+          <Skeleton className="stagger-6 h-36 animate-slide-up" />
+          <Skeleton className="stagger-6 h-36 animate-slide-up" />
+          <Skeleton className="stagger-6 h-36 animate-slide-up" />
+        </div>
+      )}
+
+      {hasSearched && isAnywhereMode && destinationsListQuery.isError && (
+        <div className="stagger-3 animate-slide-up">
+          <ErrorCard
+            message={
+              destinationsListQuery.error instanceof Error
+                ? destinationsListQuery.error.message
+                : "Unable to load destinations."
+            }
+            title="Explore unavailable"
+          />
+        </div>
+      )}
+
+      {hasSearched &&
+        isAnywhereMode &&
+        !destinationsListQuery.isPending &&
+        !destinationsListQuery.isError &&
+        destinations.length > 0 && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {destinations.map((dest) => (
+              <button
+                className="rounded-xl border border-border bg-bg-surface p-5 text-left transition-all hover:border-gold/50 hover:shadow-card-hover"
+                key={dest.destination}
+                onClick={() => {
+                  analyzeDestination(dest.destination);
+                }}
+                type="button"
+              >
+                <div className="flex items-center justify-between">
+                  <p className="font-display text-3xl text-gold">{dest.destination}</p>
+                  <span className="font-mono text-xs text-text-tertiary">
+                    {fmt(dest.flight_count)} flights
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {dest.economy_min_points != null && (
+                    <Badge variant="economy">
+                      Economy from {fmt(dest.economy_min_points)}
+                    </Badge>
+                  )}
+                  {dest.business_min_points != null && (
+                    <Badge variant="business">
+                      Business from {fmt(dest.business_min_points)}
+                    </Badge>
+                  )}
+                  {dest.first_min_points != null && (
+                    <Badge variant="first">First from {fmt(dest.first_min_points)}</Badge>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-text-tertiary">
+                  <span>
+                    {fmtDateShort(dest.date_range.from)} - {fmtDateShort(dest.date_range.to)}
+                  </span>
+                  {dest.last_updated && (
+                    <span>Updated {fmtTimeAgo(dest.last_updated)}</span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+      {hasSearched &&
+        isAnywhereMode &&
+        !destinationsListQuery.isPending &&
+        !destinationsListQuery.isError &&
+        destinations.length === 0 && (
+          <Card className="stagger-3 animate-slide-up border-border-bright/60">
+            <CardContent className="flex min-h-40 flex-col items-center justify-center gap-2 py-12 text-center">
+              <Plane className="size-5 text-text-tertiary" />
+              <p className="font-display text-2xl text-text-primary">
+                No destinations found
+              </p>
+              <p className="text-sm text-text-secondary">
+                Try a wider date range or a different cabin.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+      {hasSearched && isRouteMode && statsQuery.isPending && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Skeleton className="stagger-3 h-48 animate-slide-up" />
           <Skeleton className="stagger-4 h-48 animate-slide-up" />
@@ -346,7 +569,7 @@ export function RouteAnalytics() {
         </div>
       )}
 
-      {hasSearched && statsQuery.isError && (
+      {hasSearched && isRouteMode && statsQuery.isError && (
         <div className="stagger-3 animate-slide-up">
           <ErrorCard
             message={
@@ -373,7 +596,8 @@ export function RouteAnalytics() {
         </Card>
       )}
 
-      {stats != null &&
+      {isRouteMode &&
+        stats != null &&
         !noData &&
         !statsQuery.isPending &&
         !statsQuery.isError && (
@@ -481,8 +705,178 @@ export function RouteAnalytics() {
               </CardContent>
             </Card>
 
+            {cheapestDatesQuery.isPending && (
+              <Card className="stagger-5 animate-slide-up border-border-bright/70 bg-bg-surface">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-text-primary">
+                    <Calendar className="size-4 text-gold" />
+                    Best Dates to Book
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 pt-0">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </CardContent>
+              </Card>
+            )}
+
+            {cheapestDatesQuery.isError && (
+              <div className="stagger-5 animate-slide-up">
+                <ErrorCard
+                  message={
+                    cheapestDatesQuery.error instanceof Error
+                      ? cheapestDatesQuery.error.message
+                      : "Unable to load best dates."
+                  }
+                  title="Best dates unavailable"
+                />
+              </div>
+            )}
+
+            {!cheapestDatesQuery.isPending && !cheapestDatesQuery.isError && (
+              <Card className="stagger-5 animate-slide-up border-border-bright/70 bg-bg-surface">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-text-primary">
+                    <Calendar className="size-4 text-gold" />
+                    Best Dates to Book
+                  </CardTitle>
+                  <p className="mt-1 text-text-secondary text-xs">
+                    Lowest points per date. Gold rows are the cheapest.
+                  </p>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {sortedDates.length === 0 ? (
+                    <div className="flex min-h-28 items-center justify-center">
+                      <p className="font-display text-text-secondary text-xl">
+                        No date pricing available
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left">
+                            <th
+                              className="cursor-pointer py-2 font-mono text-xs text-text-tertiary uppercase tracking-wider"
+                              onClick={() => {
+                                setDateSortKey("date");
+                              }}
+                            >
+                              Date
+                            </th>
+                            <th
+                              className="cursor-pointer py-2 text-right font-mono text-xs text-text-tertiary uppercase tracking-wider"
+                              onClick={() => {
+                                setDateSortKey("economy");
+                              }}
+                            >
+                              Economy
+                            </th>
+                            <th
+                              className="cursor-pointer py-2 text-right font-mono text-xs text-text-tertiary uppercase tracking-wider"
+                              onClick={() => {
+                                setDateSortKey("business");
+                              }}
+                            >
+                              Business
+                            </th>
+                            <th
+                              className="cursor-pointer py-2 text-right font-mono text-xs text-text-tertiary uppercase tracking-wider"
+                              onClick={() => {
+                                setDateSortKey("first");
+                              }}
+                            >
+                              First
+                            </th>
+                            {hasAnyLastUpdated && (
+                              <th className="py-2 text-right font-mono text-xs text-text-tertiary uppercase tracking-wider">
+                                Updated
+                              </th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedDates.map((row) => {
+                            const isHighlighted = highlightedDateRows.has(
+                              row.departure_date
+                            );
+
+                            return (
+                              <tr
+                                className={cn(
+                                  "border-b border-border/50",
+                                  isHighlighted && "bg-gold/10"
+                                )}
+                                key={row.departure_date}
+                              >
+                                <td className="py-2 font-mono text-text-primary">
+                                  {fmtDate(row.departure_date)}
+                                </td>
+                                <td className="py-2 text-right font-mono">
+                                  {row.economy ? (
+                                    <span
+                                      className={
+                                        row.economy.available
+                                          ? "text-cabin-economy"
+                                          : "text-text-tertiary line-through"
+                                      }
+                                    >
+                                      {fmt(row.economy.min_points)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-text-tertiary">--</span>
+                                  )}
+                                </td>
+                                <td className="py-2 text-right font-mono">
+                                  {row.business ? (
+                                    <span
+                                      className={
+                                        row.business.available
+                                          ? "text-cabin-business"
+                                          : "text-text-tertiary line-through"
+                                      }
+                                    >
+                                      {fmt(row.business.min_points)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-text-tertiary">--</span>
+                                  )}
+                                </td>
+                                <td className="py-2 text-right font-mono">
+                                  {row.first ? (
+                                    <span
+                                      className={
+                                        row.first.available
+                                          ? "text-cabin-first"
+                                          : "text-text-tertiary line-through"
+                                      }
+                                    >
+                                      {fmt(row.first.min_points)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-text-tertiary">--</span>
+                                  )}
+                                </td>
+                                {hasAnyLastUpdated && (
+                                  <td className="py-2 text-right font-mono text-xs text-text-tertiary">
+                                    {fmtTimeAgo(row.last_updated)}
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <Card className="stagger-5 animate-slide-up border-border-bright/70">
+              <Card className="stagger-6 animate-slide-up border-border-bright/70">
                 <CardHeader>
                   <CardTitle className="text-text-primary">
                     Total Flights
@@ -510,6 +904,12 @@ export function RouteAnalytics() {
                       {formatDateLabel(stats.date_range.to)}
                     </Badge>
                   </div>
+                  {stats.last_updated && (
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary">
+                      <span>Last updated:</span>
+                      <Badge variant="default">{fmtTimeAgo(stats.last_updated)}</Badge>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {cabinAvailability.map((item) => (
                       <Badge

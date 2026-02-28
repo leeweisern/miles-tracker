@@ -1,4 +1,8 @@
 import type {
+  CheapestByDateFilters,
+  DatePricing,
+  DestinationSummary,
+  DestinationsFilters,
   FlightSearchResult,
   FlightStats,
   Program,
@@ -83,6 +87,30 @@ export const milesApi = {
         date_to: filters.date_to,
         cabin: filters.cabin,
         tier: filters.tier,
+        program_id: filters.program_id,
+        available_only: filters.available_only,
+      })}`
+    ),
+
+  destinations: (filters: DestinationsFilters) =>
+    fetchJSON<DestinationSummary[]>(
+      `/destinations${qs({
+        origin: filters.origin,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        cabin: filters.cabin,
+        available_only: filters.available_only,
+      })}`
+    ),
+
+  cheapestByDate: (filters: CheapestByDateFilters) =>
+    fetchJSON<DatePricing[]>(
+      `/flights/cheapest-by-date${qs({
+        destination: filters.destination,
+        origin: filters.origin,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        cabin: filters.cabin,
         program_id: filters.program_id,
         available_only: filters.available_only,
       })}`

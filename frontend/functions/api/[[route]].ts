@@ -5,7 +5,13 @@ interface Env {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
-const ALLOWED_PATHS = new Set(["flights", "flights/stats", "programs"]);
+const ALLOWED_PATHS = new Set([
+  "flights",
+  "flights/stats",
+  "flights/cheapest-by-date",
+  "programs",
+  "destinations",
+]);
 
 const STRIP_HEADERS = new Set([
   "access-control-allow-origin",
