@@ -84,7 +84,9 @@ export function fmtTimeAgo(isoString: string | null | undefined): string {
   if (!isoString) {
     return "--";
   }
-  const diff = Date.now() - new Date(isoString).getTime();
+  // DB stores UTC timestamps without Z suffix — ensure UTC parsing
+  const utcString = isoString.endsWith("Z") ? isoString : `${isoString}Z`;
+  const diff = Date.now() - new Date(utcString).getTime();
   if (diff < 0) {
     return "Just now";
   }
