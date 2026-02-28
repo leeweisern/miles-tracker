@@ -158,7 +158,7 @@ function getLatestScrapedAt(flights: AwardFlight[]): string | null {
   let latestIso: string | null = null;
 
   for (const flight of flights) {
-    const iso = flight.scraped_at ?? flight.updated_at;
+    const iso = flight.updated_at;
     if (!iso) {
       continue;
     }

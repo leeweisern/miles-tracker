@@ -62,7 +62,6 @@ export interface UpsertFlightInput {
   taxesMyr: number | null;
   cashEquivalentMyr?: number | null;
   notes?: string | null;
-  scrapedAt?: string | null;
 }
 
 export interface DeleteFlightsInput {
@@ -94,7 +93,6 @@ export interface AwardFlightRow {
   taxes_myr: number;
   cash_equivalent_myr: number | null;
   notes: string | null;
-  scraped_at: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -174,7 +172,6 @@ interface NormalizedFlightRecord {
   taxesMyr: number;
   cashEquivalentMyr: number | null;
   notes: string | null;
-  scrapedAt: string | null;
 }
 
 interface WhereClause {
@@ -245,7 +242,6 @@ export function searchFlights(
                  taxes_myr,
                  cash_equivalent_myr,
                  notes,
-                 scraped_at,
                  created_at,
                  updated_at
                 FROM award_flights
@@ -335,28 +331,26 @@ export function upsertFlights(
                available,
                seats_left,
                taxes_myr,
-                cash_equivalent_myr,
-                notes,
-                scraped_at,
-                created_at,
-                updated_at
+                 cash_equivalent_myr,
+                 notes,
+                 created_at,
+                 updated_at
               )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
               ON CONFLICT(program_id, origin, destination, flight_number, departure_date, cabin, tier)
               DO UPDATE SET
-                departure_time = excluded.departure_time,
-               arrival_time = excluded.arrival_time,
-               arrival_day_offset = excluded.arrival_day_offset,
-               duration_minutes = excluded.duration_minutes,
-               route_type = excluded.route_type,
-               points = excluded.points,
-               available = excluded.available,
-               seats_left = excluded.seats_left,
-               taxes_myr = excluded.taxes_myr,
-                cash_equivalent_myr = excluded.cash_equivalent_myr,
-                notes = excluded.notes,
-                scraped_at = excluded.scraped_at,
-                updated_at = datetime('now')`
+                 departure_time = excluded.departure_time,
+                arrival_time = excluded.arrival_time,
+                arrival_day_offset = excluded.arrival_day_offset,
+                duration_minutes = excluded.duration_minutes,
+                route_type = excluded.route_type,
+                points = excluded.points,
+                available = excluded.available,
+                seats_left = excluded.seats_left,
+                taxes_myr = excluded.taxes_myr,
+                 cash_equivalent_myr = excluded.cash_equivalent_myr,
+                 notes = excluded.notes,
+                 updated_at = datetime('now')`
           )
           .bind(
             flight.programId,
@@ -376,8 +370,7 @@ export function upsertFlights(
             flight.seatsLeft,
             flight.taxesMyr,
             flight.cashEquivalentMyr,
-            flight.notes,
-            flight.scrapedAt
+            flight.notes
           )
       );
 
@@ -479,7 +472,7 @@ export function getFlightStats(
                  COUNT(*) AS total_flights,
                  MIN(departure_date) AS min_date,
                  MAX(departure_date) AS max_date,
-                 MAX(COALESCE(scraped_at, updated_at)) AS last_updated
+                 MAX(updated_at) AS last_updated
                 FROM award_flights
                 ${where.sql}`
             )
@@ -612,7 +605,7 @@ export function getDestinations(
         MIN(CASE WHEN cabin = 'business' THEN points END) AS business_min_points,
         MIN(CASE WHEN cabin = 'first' THEN points END) AS first_min_points,
         SUM(CASE WHEN available = 1 THEN 1 ELSE 0 END) AS available_count,
-        MAX(COALESCE(scraped_at, updated_at)) AS last_updated
+        MAX(updated_at) AS last_updated
       FROM award_flights
       WHERE ${where.join(" AND ")}
       GROUP BY destination
@@ -721,7 +714,7 @@ export function getCheapestByDate(
         MAX(CASE WHEN cabin = 'business' AND available = 1 THEN 1 ELSE 0 END) AS biz_avail,
         MIN(CASE WHEN cabin = 'first' THEN points END) AS first_min,
         MAX(CASE WHEN cabin = 'first' AND available = 1 THEN 1 ELSE 0 END) AS first_avail,
-        MAX(COALESCE(scraped_at, updated_at)) AS last_updated
+        MAX(updated_at) AS last_updated
       FROM award_flights
       WHERE ${where.join(" AND ")}
       GROUP BY departure_date
@@ -932,8 +925,6 @@ function normalizeUpsertFlightInput(
       pointer,
       "cash_equivalent_myr"
     );
-    const scrapedAt = yield* normalizeRecordScrapedAt(input.scrapedAt, pointer);
-
     return {
       programId,
       origin,
@@ -954,7 +945,6 @@ function normalizeUpsertFlightInput(
       cashEquivalentMyr:
         cashEquivalentMyr == null ? null : round2(cashEquivalentMyr),
       notes: input.notes ?? null,
-      scrapedAt,
     };
   });
 }
@@ -1289,20 +1279,6 @@ function normalizeRecordOptionalNonNegativeNumber(
   return recordFailure(pointer, field, "must be a non-negative number");
 }
 
-function normalizeRecordScrapedAt(
-  value: string | null | undefined,
-  pointer: string
-): Effect.Effect<string | null, ValidationError, never> {
-  const normalized = normalizeOptionalString(value) ?? null;
-  if (!normalized) {
-    return Effect.succeed(null);
-  }
-  if (!Number.isNaN(Date.parse(normalized))) {
-    return Effect.succeed(normalized);
-  }
-  return recordFailure(pointer, "scraped_at", "must be a valid ISO datetime");
-}
-
 function buildWhereClause(filters: FiltersForWhere): WhereClause {
   const where: string[] = ["origin = ?", "destination = ?"];
   const params: Array<string | number> = [filters.origin, filters.destination];
@@ -1371,7 +1347,6 @@ function toAwardFlightRow(row: unknown): AwardFlightRow {
     taxes_myr: round2(toNumber(value.taxes_myr)),
     cash_equivalent_myr: nullableNumber(value.cash_equivalent_myr),
     notes: toNullableString(value.notes),
-    scraped_at: toNullableString(value.scraped_at),
     created_at: toNullableString(value.created_at),
     updated_at: toNullableString(value.updated_at),
   };

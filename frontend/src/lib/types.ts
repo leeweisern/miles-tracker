@@ -24,7 +24,6 @@ export interface AwardFlight {
   points: number;
   program_id: string;
   route_type: string;
-  scraped_at: string | null;
   seats_left: number | null;
   taxes_myr: number;
   tier: string;

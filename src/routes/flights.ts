@@ -193,7 +193,6 @@ function toFlightInput(value: unknown): UpsertFlightInput {
         ? null
         : toNullableNumber(payload.cash_equivalent_myr),
     notes: toNullableString(payload.notes),
-    scrapedAt: toNullableString(payload.scraped_at),
   };
 }
 

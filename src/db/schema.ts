@@ -40,7 +40,6 @@ export const awardFlights = sqliteTable(
     taxesMyr: real("taxes_myr").notNull(),
     cashEquivalentMyr: real("cash_equivalent_myr"),
     notes: text("notes"),
-    scrapedAt: text("scraped_at"),
     createdAt: text("created_at").default(sql`(datetime('now'))`),
     updatedAt: text("updated_at").default(sql`(datetime('now'))`),
   },

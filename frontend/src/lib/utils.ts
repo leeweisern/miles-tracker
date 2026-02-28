@@ -79,7 +79,7 @@ export function cabinBg(cabin: string): string {
   }
 }
 
-/** Format a scraped_at timestamp as relative time, e.g. "2h ago", "3d ago" */
+/** Format a UTC timestamp as relative time, e.g. "2h ago", "3d ago" */
 export function fmtTimeAgo(isoString: string | null | undefined): string {
   if (!isoString) {
     return "--";
