@@ -2,6 +2,9 @@
   "name": "miles-tracker",
   "version": "1.0.0",
   "private": true,
+  "bin": {
+    "mt": "cli/mt.ts"
+  },
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
